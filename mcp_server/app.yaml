@@ -1,0 +1,20 @@
+# Databricks App config for the trip planner MCP server.
+# Deploy with the app's name starting with "mcp-" (e.g. "mcp-trip-planner")
+# so it's discoverable in Agent Bricks' "Custom MCP Server" tool picker -
+# see the weather-mcp-homework project's README for why this matters.
+# Source code path when deploying from Git: mcp_server (self-contained,
+# no cross-folder imports).
+
+command:
+  - "python"
+  - "trip_mcp_server.py"
+
+env:
+  # Point at your Lakebase instance once provisioned; defaults to a local
+  # SQLite file for zero-setup testing.
+  - name: "DATABASE_URL"
+    value: "sqlite:///trip_planner.db"
+  # Databricks foundation model embedding endpoint used by embeddings.py.
+  # Falls back automatically to a local hashing-vectorizer if unset/unreachable.
+  - name: "EMBEDDING_ENDPOINT"
+    value: "databricks-gte-large-en"
