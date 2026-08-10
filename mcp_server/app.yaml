@@ -23,7 +23,7 @@ env:
   # Required once you attach a Lakebase Database resource (see note above) -
   # replace with your actual endpoint resource name.
   - name: "ENDPOINT_NAME"
-    value: "projects/<project-id>/branches/<branch-id>/endpoints/<endpoint-id>"
+    value: "projects/trip-planner-db/branches/production/endpoints/primary"
   # Fallback only - used if no Lakebase resource is attached (PGHOST unset).
   # Defaults to a local SQLite file for zero-setup testing.
   - name: "DATABASE_URL"
