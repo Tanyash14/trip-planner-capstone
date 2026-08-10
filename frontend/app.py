@@ -143,7 +143,7 @@ with tab_dest:
             all_activities = db.run_query(f"SELECT * FROM activities WHERE destination_id = {ph}", (d["id"],))
             if all_activities:
                 df = pd.DataFrame(all_activities)[["id", "name", "category", "is_outdoor", "requires_good_weather"]]
-                st.dataframe(df, width="stretch", hide_index=True)
+                st.dataframe(df, use_container_width=True, hide_index=True)
 
 # --- Weather & Risk tab ---
 with tab_risk:
