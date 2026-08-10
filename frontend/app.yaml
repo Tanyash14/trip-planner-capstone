@@ -19,7 +19,7 @@ command:
 
 env:
   - name: "ENDPOINT_NAME"
-    value: "projects/<project-id>/branches/<branch-id>/endpoints/<endpoint-id>"
+    value: "projects/trip-planner-db/branches/production/endpoints/primary"
   - name: "DATABASE_URL"
     value: "sqlite:///trip_planner.db"
   - name: "EMBEDDING_ENDPOINT"
