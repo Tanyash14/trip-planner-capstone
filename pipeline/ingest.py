@@ -33,7 +33,32 @@ never touches a Spark DataFrame.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+
+# NOTE: Lakebase connection details are set as env vars (PGHOST/PGUSER/etc,
+# see db.py's _lakebase_connect()) BEFORE importing db/trip_store, because
+# this Databricks Jobs workspace's Serverless Python-script task type has no
+# UI for setting task-level environment variables (unlike Databricks Apps,
+# which get PGHOST etc. auto-injected via "+ Add resource -> Database"). So
+# instead we accept them as CLI parameters here and export them into
+# os.environ ourselves, right at the top before any Lakebase-touching import
+# runs its module-level code.
+_conn_parser = argparse.ArgumentParser(add_help=False)
+_conn_parser.add_argument("--pghost")
+_conn_parser.add_argument("--pgport", default="5432")
+_conn_parser.add_argument("--pgdatabase", default="databricks_postgres")
+_conn_parser.add_argument("--pgsslmode", default="require")
+_conn_parser.add_argument("--pguser")
+_conn_parser.add_argument("--endpoint-name")
+_conn_args, _ = _conn_parser.parse_known_args()
+for _env_name, _val in (
+    ("PGHOST", _conn_args.pghost), ("PGPORT", _conn_args.pgport),
+    ("PGDATABASE", _conn_args.pgdatabase), ("PGSSLMODE", _conn_args.pgsslmode),
+    ("PGUSER", _conn_args.pguser), ("ENDPOINT_NAME", _conn_args.endpoint_name),
+):
+    if _val:
+        os.environ[_env_name] = _val
 
 import db
 import open_meteo_broker as weather
@@ -94,7 +119,10 @@ def run(trip_id: int, destinations: list[str]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ingest destinations, activities, and weather for a trip.")
+    parser = argparse.ArgumentParser(
+        description="Ingest destinations, activities, and weather for a trip.",
+        parents=[_conn_parser],
+    )
     parser.add_argument("--trip-id", type=int, required=True, help="Existing trip id (create it via the frontend first).")
     parser.add_argument("--destinations", nargs="+", required=True, help="One or more destination names, e.g. \"Kyoto, Japan\" \"Osaka, Japan\".")
     args = parser.parse_args()
