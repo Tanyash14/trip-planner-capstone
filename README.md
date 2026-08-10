@@ -162,16 +162,40 @@ The agent is instructed to always call this before rescheduling and quote its `r
    - Configure Git: this repo, branch `main`.
    - Deploy → From Git → source code path `mcp_server`.
 
-3. **Run the ingestion pipeline** for a trip (after creating the trip via the frontend or
+3. **Provision Lakebase and connect it** (real Postgres, not the SQLite fallback):
+   - App switcher → **Lakebase Postgres** → **Autoscaling** → **New project** (e.g. `trip-planner-db`).
+   - On the `mcp-trip-planner` app's page, note its **`DATABRICKS_CLIENT_ID`** from the Environment tab.
+   - In the Lakebase project's SQL Editor, run:
+     ```sql
+     CREATE EXTENSION IF NOT EXISTS databricks_auth;
+     SELECT databricks_create_role('<DATABRICKS_CLIENT_ID>', 'service_principal');
+     GRANT CONNECT ON DATABASE databricks_postgres TO "<DATABRICKS_CLIENT_ID>";
+     GRANT CREATE, USAGE ON SCHEMA public TO "<DATABRICKS_CLIENT_ID>";
+     ```
+   - Back on the app: **App resources → + Add resource → Database** → select the project/branch/database.
+     This auto-injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGSSLMODE`.
+   - Manually add one more env var (not auto-injected): `ENDPOINT_NAME`, copied from the Lakebase
+     branch's **Computes** tab → **Get ID** → **Copy resource name**.
+   - Redeploy. `db.py`'s `_lakebase_connect()` uses these to generate a fresh OAuth token per
+     connection via `WorkspaceClient().postgres.generate_database_credential()` - no static
+     password anywhere. See [Connect a custom Databricks app to Lakebase](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling).
+
+4. **Deploy the frontend** as a second Databricks App (`trip-planner-frontend` - no naming
+   constraint since it isn't an MCP tool), source code path `frontend`. Repeat the same Lakebase
+   role-grant + resource-attach steps for its own `DATABRICKS_CLIENT_ID`, pointed at the **same**
+   Lakebase project/branch/database, so it sees the same data as `mcp-trip-planner`.
+
+5. **Run the ingestion pipeline** for a trip (after creating the trip via the frontend or
    `create_trip` tool, to get a `trip_id`):
    - Databricks Jobs & Pipelines → Create Job → task type **Python script** → point at
      `pipeline/ingest.py` → parameters `--trip-id <id> --destinations "Kyoto, Japan" "Osaka, Japan"`.
+   - Set the same `PGHOST`/`PGPORT`/`PGDATABASE`/`PGSSLMODE`/`ENDPOINT_NAME` as task environment
+     variables (copy the values from `mcp-trip-planner`'s Environment tab). For `PGUSER`, jobs run as
+     your own identity by default (not a service principal), so use **your Databricks email** here -
+     as the Lakebase project's creator you already have access, no extra role grant needed.
    - Run once per trip (or again to add more destinations).
 
-4. **Deploy the frontend** as a second Databricks App (`trip-planner-frontend` - no naming
-   constraint since it isn't an MCP tool), source code path `frontend`.
-
-5. **Register the MCP server + a Genie Space in Agent Bricks**:
+6. **Register the MCP server + a Genie Space in Agent Bricks**:
    - Agent Bricks → New → **Supervisor Agent**.
    - Tools and sub-agents → search "mcp" → select `mcp-trip-planner`.
    - Also add a **Genie Space** pointed at the 7 Lakebase tables (create it first under Genie
@@ -179,10 +203,6 @@ The agent is instructed to always call this before rescheduling and quote its `r
      for analytics questions ("what's my average AQI across the trip", "how many activities got
      rescheduled") without a dedicated tool for every possible aggregate query.
    - Paste the system prompt below into Instructions.
-
-6. **Set `DATABASE_URL`** on both `mcp-trip-planner` and `trip-planner-frontend` (and as a job
-   parameter/env for the pipeline) to the same Lakebase connection string once provisioned, so all
-   three see the same data. Defaults to a local SQLite file otherwise.
 
 ## Agent system prompt
 

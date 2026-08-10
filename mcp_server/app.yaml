@@ -4,14 +4,28 @@
 # see the weather-mcp-homework project's README for why this matters.
 # Source code path when deploying from Git: mcp_server (self-contained,
 # no cross-folder imports).
+#
+# Lakebase connection: in the Databricks Apps UI, App resources -> + Add
+# resource -> Database -> select your Lakebase project/branch/database.
+# That automatically injects PGHOST/PGPORT/PGDATABASE/PGUSER/PGSSLMODE as
+# env vars and creates a service-principal Postgres role - you do NOT set
+# DATABASE_URL for this. You DO need to manually add ENDPOINT_NAME below
+# (not auto-injected) - copy it from the Lakebase branch's Computes tab ->
+# Get ID -> Copy resource name. See db.py's _lakebase_connect() for how
+# this is used (short-lived OAuth token per connection, not a static
+# password). DATABASE_URL below is only the fallback for local/manual runs.
 
 command:
   - "python"
   - "trip_mcp_server.py"
 
 env:
-  # Point at your Lakebase instance once provisioned; defaults to a local
-  # SQLite file for zero-setup testing.
+  # Required once you attach a Lakebase Database resource (see note above) -
+  # replace with your actual endpoint resource name.
+  - name: "ENDPOINT_NAME"
+    value: "projects/<project-id>/branches/<branch-id>/endpoints/<endpoint-id>"
+  # Fallback only - used if no Lakebase resource is attached (PGHOST unset).
+  # Defaults to a local SQLite file for zero-setup testing.
   - name: "DATABASE_URL"
     value: "sqlite:///trip_planner.db"
   # Databricks foundation model embedding endpoint used by embeddings.py.

@@ -1,10 +1,12 @@
 # Databricks App config for the trip planner frontend (Streamlit).
 # Source code path when deploying from Git: frontend (self-contained).
 #
-# Set DATABASE_URL to the same Lakebase/Postgres connection string as
-# mcp_server/app.yaml so the frontend and the agent's tools see the same
-# data (two separate Databricks Apps each have their own local disk, so
-# the sqlite default below won't be shared between them).
+# Attach the SAME Lakebase Database resource here as on mcp_server (App
+# resources -> + Add resource -> Database -> same project/branch/database)
+# so the frontend and the agent's tools see the same data - two separate
+# Databricks Apps each have their own local disk, so the sqlite fallback
+# below won't be shared between them. See mcp_server/app.yaml for the full
+# explanation of ENDPOINT_NAME / PGHOST etc.
 
 command:
   - "streamlit"
@@ -16,6 +18,8 @@ command:
   - "0.0.0.0"
 
 env:
+  - name: "ENDPOINT_NAME"
+    value: "projects/<project-id>/branches/<branch-id>/endpoints/<endpoint-id>"
   - name: "DATABASE_URL"
     value: "sqlite:///trip_planner.db"
   - name: "EMBEDDING_ENDPOINT"

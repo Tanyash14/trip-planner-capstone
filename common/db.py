@@ -46,8 +46,44 @@ DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{_DEFAULT_SQLITE_PATH}
 _lock = threading.Lock()
 
 
+def use_lakebase_resource() -> bool:
+    """True when this app has a Lakebase database attached as a Databricks
+    App resource (Apps UI: App resources -> + Add resource -> Database).
+    That flow injects PGHOST/PGPORT/PGDATABASE/PGUSER/PGSSLMODE automatically
+    but authenticates with a short-lived OAuth token, not a static password -
+    see `_lakebase_connect()`. This takes priority over DATABASE_URL."""
+    return bool(os.environ.get("PGHOST"))
+
+
 def use_postgres() -> bool:
-    return DATABASE_URL.startswith("postgresql")
+    return use_lakebase_resource() or DATABASE_URL.startswith("postgresql")
+
+
+def _lakebase_connect():
+    """Connect to a Lakebase database attached as an App resource, using a
+    fresh OAuth token as the password (Lakebase tokens expire after ~1 hour,
+    so a new one is generated per connection rather than cached - see
+    https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling).
+
+    Requires `ENDPOINT_NAME` to be set in app.yaml (the Lakebase compute's
+    resource name, e.g. "projects/<id>/branches/<id>/endpoints/<id>" - copy
+    it from the branch's Computes tab -> Get ID -> Copy resource name in the
+    Lakebase UI). PGHOST/PGPORT/PGDATABASE/PGUSER/PGSSLMODE are injected
+    automatically once the Database resource is attached in the Apps UI."""
+    import psycopg2
+    from databricks.sdk import WorkspaceClient
+
+    endpoint_name = os.environ["ENDPOINT_NAME"]
+    client = WorkspaceClient()
+    credential = client.postgres.generate_database_credential(endpoint=endpoint_name)
+    return psycopg2.connect(
+        host=os.environ["PGHOST"],
+        port=os.environ.get("PGPORT", "5432"),
+        dbname=os.environ.get("PGDATABASE", "databricks_postgres"),
+        user=os.environ["PGUSER"],
+        password=credential.token,
+        sslmode=os.environ.get("PGSSLMODE", "require"),
+    )
 
 
 @contextmanager
@@ -55,9 +91,15 @@ def get_connection():
     """Yield (connection, placeholder_style). placeholder_style is '?' for
     SQLite and '%s' for Postgres - use it to build parameterized queries
     that work against either backend."""
-    if use_postgres():
+    if use_lakebase_resource():
+        conn = _lakebase_connect()
+        try:
+            yield conn, "%s"
+            conn.commit()
+        finally:
+            conn.close()
+    elif use_postgres():
         import psycopg2
-        import psycopg2.extras
 
         conn = psycopg2.connect(DATABASE_URL.replace("postgresql+psycopg2://", "postgresql://"))
         try:
